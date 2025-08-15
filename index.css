@@ -34,3 +34,50 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
 }
+
+/* Video.js customization */
+.video-js {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.video-js .vjs-big-play-button {
+  background-color: rgba(220, 38, 38, 0.8) !important; /* red-600 with opacity */
+  border-color: #dc2626 !important;
+  border-radius: 50% !important;
+  width: 80px !important;
+  height: 80px !important;
+  line-height: 80px !important;
+  margin-top: -40px !important;
+  margin-left: -40px !important;
+}
+
+.video-js .vjs-big-play-button:hover {
+  background-color: rgba(185, 28, 28, 0.9) !important; /* red-700 with opacity */
+}
+
+.video-js .vjs-control-bar {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent) !important;
+}
+
+.video-js .vjs-progress-control .vjs-progress-holder .vjs-play-progress {
+  background-color: #dc2626 !important; /* red-600 */
+}
+
+.video-js .vjs-volume-level {
+  background-color: #dc2626 !important; /* red-600 */
+}
+
+.video-js .vjs-slider:focus {
+  box-shadow: 0 0 1em #dc2626 !important;
+}
+
+/* Status indicator animations */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

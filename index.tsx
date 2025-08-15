@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, FC, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, FC, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
+import videojs from 'video.js';
+import 'video.js/dist/video-js.css';
 
 // --- TYPE DEFINITIONS ---
 interface Channel {
@@ -7,6 +9,7 @@ interface Channel {
     group: string;
     logo: string;
     url: string;
+    status?: 'unknown' | 'working' | 'error' | 'checking';
 }
 
 type ChannelsByCountry = Record<string, Channel[]>;
@@ -25,7 +28,7 @@ const ChevronLeftIcon: FC<{ className?: string }> = ({ className = "w-6 h-6" }) 
 );
 
 const StreamErrorIcon: FC = () => (
-     <div className="text-red-500/80 absolute inset-0 flex flex-col items-center justify-center bg-black/50">
+    <div className="text-red-500/80 absolute inset-0 flex flex-col items-center justify-center bg-black/50">
         <svg className="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
         <p className="mt-4 text-center font-medium text-white">Erreur de lecture</p>
         <p className="mt-1 text-sm text-center text-red-400">Le flux est peut-être indisponible.</p>
@@ -41,6 +44,32 @@ const EmptyStateIcon: FC<{ className?: string }> = ({ className = "w-16 h-16" })
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 13.5h-6" />
     </svg>
 );
+
+const StatusIndicator: FC<{ status: Channel['status'] }> = ({ status }) => {
+    const getStatusConfig = () => {
+        switch (status) {
+            case 'working':
+                return { color: 'bg-green-500', icon: '✓', text: 'Fonctionne' };
+            case 'error':
+                return { color: 'bg-red-500', icon: '✗', text: 'Erreur' };
+            case 'checking':
+                return { color: 'bg-yellow-500', icon: '⟳', text: 'Vérification...' };
+            default:
+                return { color: 'bg-gray-400', icon: '?', text: 'Inconnu' };
+        }
+    };
+
+    const config = getStatusConfig();
+
+    return (
+        <div
+            className={`absolute top-1 right-1 w-6 h-6 ${config.color} rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg`}
+            title={config.text}
+        >
+            <span className={status === 'checking' ? 'animate-spin' : ''}>{config.icon}</span>
+        </div>
+    );
+};
 
 
 // --- COMPONENTS ---
@@ -73,7 +102,13 @@ const SearchInput: FC<{
     </div>
 );
 
-const Header: FC<{ title: string; onBack?: () => void; showBack: boolean }> = ({ title, onBack, showBack }) => (
+const Header: FC<{
+    title: string;
+    onBack?: () => void;
+    showBack: boolean;
+    onTestAll?: () => void;
+    showTestAll?: boolean;
+}> = ({ title, onBack, showBack, onTestAll, showTestAll }) => (
     <header className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 flex items-center justify-between flex-shrink-0 shadow-lg">
         <div className="w-1/3">
             {showBack && (
@@ -83,7 +118,16 @@ const Header: FC<{ title: string; onBack?: () => void; showBack: boolean }> = ({
             )}
         </div>
         <h1 className="text-xl font-bold text-center truncate w-1/3">{title}</h1>
-        <div className="w-1/3"></div> {/* Spacer */}
+        <div className="w-1/3 flex justify-end">
+            {showTestAll && (
+                <button
+                    onClick={onTestAll}
+                    className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors"
+                >
+                    Tester tout
+                </button>
+            )}
+        </div>
     </header>
 );
 
@@ -131,33 +175,50 @@ const ImageWithFallback: FC<{ src: string; alt: string }> = ({ src, alt }) => {
     }
 
     return (
-         <img 
-            src={src} 
-            alt={alt} 
+        <img
+            src={src}
+            alt={alt}
             className="max-w-full max-h-full object-contain"
-            onError={() => setHasError(true)} 
+            onError={() => setHasError(true)}
         />
     );
 };
 
 
-const ChannelGrid: FC<{ channels: Channel[]; onSelect: (url: string) => void; }> = ({ channels, onSelect }) => (
+const ChannelGrid: FC<{
+    channels: Channel[];
+    onSelect: (url: string) => void;
+    onCheckStatus: (channel: Channel) => void;
+}> = ({ channels, onSelect, onCheckStatus }) => (
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 sm:gap-3 animate-fade-in">
         {channels.length > 0 ? channels.map((channel, index) => (
             <div
                 key={`${channel.url}-${index}`}
-                onClick={() => onSelect(channel.url)}
-                className="channel-item bg-white border border-gray-200 rounded-lg p-2 flex flex-col items-center justify-start text-center cursor-pointer transition-all duration-300 transform hover:shadow-xl hover:-translate-y-1.5 hover:border-red-500 group"
+                className="channel-item bg-white border border-gray-200 rounded-lg p-2 flex flex-col items-center justify-start text-center cursor-pointer transition-all duration-300 transform hover:shadow-xl hover:-translate-y-1.5 hover:border-red-500 group relative"
                 title={channel.name}
             >
-                <div className="w-full h-20 flex items-center justify-center mb-2 transition-transform duration-300 group-hover:scale-110">
-                   <ImageWithFallback src={channel.logo} alt={channel.name} />
+                <StatusIndicator status={channel.status} />
+                <div
+                    className="w-full h-20 flex items-center justify-center mb-2 transition-transform duration-300 group-hover:scale-110"
+                    onClick={() => onSelect(channel.url)}
+                >
+                    <ImageWithFallback src={channel.logo} alt={channel.name} />
                 </div>
-                <span className="text-black text-xs font-semibold h-10 flex items-center justify-center w-full break-words">{channel.name}</span>
+                <span className="text-black text-xs font-semibold h-8 flex items-center justify-center w-full break-words mb-1">{channel.name}</span>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onCheckStatus(channel);
+                    }}
+                    className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded transition-colors"
+                    disabled={channel.status === 'checking'}
+                >
+                    {channel.status === 'checking' ? 'Test...' : 'Tester'}
+                </button>
             </div>
         )) : (
             <div className="col-span-full text-center text-gray-500 mt-12 animate-fade-in">
-                 <EmptyStateIcon className="mx-auto text-gray-400" />
+                <EmptyStateIcon className="mx-auto text-gray-400" />
                 <p className="mt-4 text-lg">Aucune chaîne trouvée.</p>
                 <p className="text-sm">Essayez de modifier votre recherche.</p>
             </div>
@@ -167,50 +228,72 @@ const ChannelGrid: FC<{ channels: Channel[]; onSelect: (url: string) => void; }>
 
 const VideoPlayer: FC<{ streamUrl: string | null }> = ({ streamUrl }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const hlsRef = useRef<any>(null);
+    const playerRef = useRef<any>(null);
     const [streamError, setStreamError] = useState(false);
 
     useEffect(() => {
-        if (!streamUrl) return;
+        if (!streamUrl || !videoRef.current) return;
 
         const proxiedStreamUrl = `${CORS_PROXY_URL}${encodeURIComponent(streamUrl)}`;
         setStreamError(false);
-        const video = videoRef.current;
-        if (!video) return;
 
-        if (hlsRef.current) hlsRef.current.destroy();
-
-        const Hls = (window as any).Hls;
-        if (Hls && Hls.isSupported()) {
-            const hls = new Hls();
-            hlsRef.current = hls;
-            hls.loadSource(proxiedStreamUrl);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                video.play().catch(e => console.error("La lecture automatique a été bloquée:", e));
-            });
-            hls.on(Hls.Events.ERROR, (event: any, data: any) => {
-                if (data.fatal) {
-                    console.error('Erreur HLS fatale:', data);
-                    setStreamError(true);
-                }
-            });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = proxiedStreamUrl;
-            video.addEventListener('loadedmetadata', () => {
-                video.play().catch(e => console.error("La lecture automatique a été bloquée:", e));
-            });
-             video.addEventListener('error', () => setStreamError(true));
+        // Détruire le lecteur précédent s'il existe
+        if (playerRef.current) {
+            playerRef.current.dispose();
+            playerRef.current = null;
         }
-        
+
+        // Créer le lecteur Video.js
+        const player = videojs(videoRef.current, {
+            controls: true,
+            responsive: true,
+            fluid: true,
+            fill: true,
+            autoplay: true,
+            preload: 'auto',
+            sources: [{
+                src: proxiedStreamUrl,
+                type: 'application/x-mpegURL'
+            }],
+            html5: {
+                vhs: {
+                    overrideNative: true
+                }
+            }
+        });
+
+        playerRef.current = player;
+
+        // Gestion des erreurs
+        player.on('error', () => {
+            console.error('Erreur Video.js:', player.error());
+            setStreamError(true);
+        });
+
+        // Gestion de la lecture
+        player.ready(() => {
+            player.play().catch((e: any) => {
+                console.error("La lecture automatique a été bloquée:", e);
+            });
+        });
+
         return () => {
-            if (hlsRef.current) hlsRef.current.destroy();
+            if (playerRef.current) {
+                playerRef.current.dispose();
+                playerRef.current = null;
+            }
         };
     }, [streamUrl]);
 
     return (
         <div className="bg-black w-full h-full flex items-center justify-center relative">
-            <video ref={videoRef} className="w-full h-full" style={{ opacity: streamError ? 0 : 1 }} controls autoPlay />
+            <div data-vjs-player className="w-full h-full">
+                <video
+                    ref={videoRef}
+                    className="video-js vjs-default-skin w-full h-full"
+                    style={{ opacity: streamError ? 0 : 1 }}
+                />
+            </div>
             {streamError && <StreamErrorIcon />}
         </div>
     );
@@ -281,7 +364,7 @@ const App: FC = () => {
             }
             setChannelsByCountry(parsedData);
         };
-        
+
         fetchM3uPlaylist();
     }, []);
 
@@ -297,15 +380,79 @@ const App: FC = () => {
     const handleSelectChannel = (url: string) => {
         setCurrentStreamUrl(url);
     };
-    
+
     const handleClosePlayer = () => {
         setCurrentStreamUrl(null);
+    };
+
+    const handleCheckChannelStatus = async (channel: Channel) => {
+        // Mettre à jour le statut à "checking"
+        setChannelsByCountry(prev => ({
+            ...prev,
+            [selectedCountry!]: prev[selectedCountry!].map(ch =>
+                ch.url === channel.url ? { ...ch, status: 'checking' } : ch
+            )
+        }));
+
+        try {
+            const proxiedStreamUrl = `${CORS_PROXY_URL}${encodeURIComponent(channel.url)}`;
+
+            // Test avec une requête HEAD pour vérifier la disponibilité
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 secondes timeout
+
+            const response = await fetch(proxiedStreamUrl, {
+                method: 'HEAD',
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            const status = response.ok ? 'working' : 'error';
+
+            // Mettre à jour le statut
+            setChannelsByCountry(prev => ({
+                ...prev,
+                [selectedCountry!]: prev[selectedCountry!].map(ch =>
+                    ch.url === channel.url ? { ...ch, status } : ch
+                )
+            }));
+
+        } catch (error) {
+            console.error('Erreur lors du test de la chaîne:', error);
+
+            // Mettre à jour le statut à "error"
+            setChannelsByCountry(prev => ({
+                ...prev,
+                [selectedCountry!]: prev[selectedCountry!].map(ch =>
+                    ch.url === channel.url ? { ...ch, status: 'error' } : ch
+                )
+            }));
+        }
+    };
+
+    const handleTestAllChannels = async () => {
+        if (!selectedCountry) return;
+
+        const channels = channelsByCountry[selectedCountry];
+
+        // Tester les chaînes par petits groupes pour éviter de surcharger
+        const batchSize = 5;
+        for (let i = 0; i < channels.length; i += batchSize) {
+            const batch = channels.slice(i, i + batchSize);
+            await Promise.all(batch.map(channel => handleCheckChannelStatus(channel)));
+
+            // Petite pause entre les groupes
+            if (i + batchSize < channels.length) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
     };
 
     const filteredCountries = useMemo(() => {
         const countries = Object.keys(channelsByCountry).sort();
         if (!countrySearchTerm) return countries;
-        return countries.filter(country => 
+        return countries.filter(country =>
             country.toLowerCase().includes(countrySearchTerm.toLowerCase())
         );
     }, [channelsByCountry, countrySearchTerm]);
@@ -314,7 +461,7 @@ const App: FC = () => {
         if (!selectedCountry) return [];
         const channels = channelsByCountry[selectedCountry] || [];
         if (!channelSearchTerm) return channels;
-        return channels.filter(channel => 
+        return channels.filter(channel =>
             channel.name.toLowerCase().includes(channelSearchTerm.toLowerCase())
         );
     }, [channelsByCountry, selectedCountry, channelSearchTerm]);
@@ -327,26 +474,27 @@ const App: FC = () => {
         if (selectedCountry) {
             return (
                 <div key={selectedCountry}> {/* Key change triggers animation */}
-                    <SearchInput 
+                    <SearchInput
                         placeholder={`Rechercher dans ${selectedCountry}...`}
                         value={channelSearchTerm}
                         onChange={setChannelSearchTerm}
                     />
-                    <ChannelGrid 
+                    <ChannelGrid
                         channels={filteredChannels}
                         onSelect={handleSelectChannel}
+                        onCheckStatus={handleCheckChannelStatus}
                     />
                 </div>
             );
         }
         return (
             <div key="country-list" className="max-w-lg mx-auto"> {/* Centered content */}
-                <SearchInput 
+                <SearchInput
                     placeholder="Rechercher un pays..."
                     value={countrySearchTerm}
                     onChange={setCountrySearchTerm}
                 />
-                <CountryList 
+                <CountryList
                     countries={filteredCountries}
                     onSelect={handleSelectCountry}
                 />
@@ -356,16 +504,18 @@ const App: FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto h-screen bg-white shadow-2xl flex flex-col">
-            <Header 
+            <Header
                 title={selectedCountry || 'MAYO TV'}
                 onBack={handleBackToCountries}
                 showBack={!!selectedCountry}
+                onTestAll={handleTestAllChannels}
+                showTestAll={!!selectedCountry}
             />
             <main className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-gray-50">
                 {renderContent()}
             </main>
             {currentStreamUrl && (
-                <PlayerOverlay 
+                <PlayerOverlay
                     streamUrl={currentStreamUrl}
                     onClose={handleClosePlayer}
                 />
