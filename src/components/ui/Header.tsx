@@ -7,9 +7,10 @@ interface HeaderProps {
     showBack: boolean;
     onTestAll?: () => void;
     showTestAll?: boolean;
+    preloadProgress?: number;
 }
 
-export const Header: FC<HeaderProps> = ({ title, onBack, showBack, onTestAll, showTestAll }) => (
+export const Header: FC<HeaderProps> = ({ title, onBack, showBack, onTestAll, showTestAll, preloadProgress }) => (
     <header className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 flex items-center justify-between flex-shrink-0 shadow-lg">
         <div className="w-1/3">
             {showBack && (
@@ -19,7 +20,13 @@ export const Header: FC<HeaderProps> = ({ title, onBack, showBack, onTestAll, sh
             )}
         </div>
         <h1 className="text-xl font-bold text-center truncate w-1/3">{title}</h1>
-        <div className="w-1/3 flex justify-end">
+        <div className="w-1/3 flex justify-end items-center gap-2">
+            {preloadProgress !== undefined && preloadProgress < 100 && (
+                <div className="text-xs text-white/80 flex items-center gap-1">
+                    <div className="w-3 h-3 border border-white/50 rounded-full animate-spin border-t-white"></div>
+                    {Math.round(preloadProgress)}%
+                </div>
+            )}
             {showTestAll && (
                 <button
                     onClick={onTestAll}

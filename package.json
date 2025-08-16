@@ -6,18 +6,23 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "clean": "node scripts/clean-install.js",
+    "validate": "node scripts/validate-setup.js",
+    "icons": "node scripts/generate-icons.js",
+    "icons:temp": "node scripts/create-temp-icons.js"
   },
   "dependencies": {
-    "react": "^19.1.1",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "video.js": "^8.23.4",
-    "path": "^0.12.7",
-    "url": "^0.11.4",
-    "vite": "^7.1.2",
-    "react-dom": "^19.1.1"
+    "@videojs/http-streaming": "^3.17.2",
+    "videojs-contrib-quality-levels": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/react": "^18.2.79",
+    "@types/react-dom": "^18.2.25",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

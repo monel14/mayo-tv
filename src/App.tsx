@@ -1,8 +1,9 @@
 import React, { FC, useState, useMemo } from 'react';
 import { Channel } from './types';
-import { useChannels } from './hooks/useChannels';
+import { useOptimizedChannels } from './hooks/useOptimizedChannels';
+import { useImagePreloader } from './hooks/useImagePreloader';
 import { testChannelStatus } from './utils/channelTester';
-import { Loader } from './components/ui/Loader';
+import { OptimizedLoader } from './components/ui/OptimizedLoader';
 import { SearchInput } from './components/ui/SearchInput';
 import { Header } from './components/ui/Header';
 import { CountryList } from './components/CountryList';
@@ -10,11 +11,22 @@ import { ChannelGrid } from './components/ChannelGrid';
 import { PlayerOverlay } from './components/PlayerOverlay';
 
 export const App: FC = () => {
-    const { channelsByCountry, setChannelsByCountry, isLoading, error } = useChannels();
+    const { 
+        channelsByCountry, 
+        setChannelsByCountry, 
+        loadingState, 
+        error, 
+        refreshChannels,
+        isCacheValid 
+    } = useOptimizedChannels();
     const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
     const [currentStreamUrl, setCurrentStreamUrl] = useState<string | null>(null);
     const [countrySearchTerm, setCountrySearchTerm] = useState('');
     const [channelSearchTerm, setChannelSearchTerm] = useState('');
+
+    // Préchargement des images pour les chaînes visibles
+    const currentChannels = selectedCountry ? channelsByCountry[selectedCountry] || [] : [];
+    const { preloadProgress } = useImagePreloader(currentChannels, !!selectedCountry);
 
     const handleSelectCountry = (country: string) => {
         setSelectedCountry(country);
@@ -88,8 +100,15 @@ export const App: FC = () => {
         );
     }, [channelsByCountry, selectedCountry, channelSearchTerm]);
 
-    if (isLoading) return <Loader message="Chargement de la playlist..." />;
-    if (error) return <Loader message={error} />;
+    if (loadingState.isLoading || error) {
+        return (
+            <OptimizedLoader 
+                loadingState={loadingState}
+                onRefresh={error ? refreshChannels : undefined}
+                isCacheValid={isCacheValid}
+            />
+        );
+    }
 
     const renderContent = () => {
         if (selectedCountry) {
@@ -131,6 +150,7 @@ export const App: FC = () => {
                 showBack={!!selectedCountry}
                 onTestAll={handleTestAllChannels}
                 showTestAll={!!selectedCountry}
+                preloadProgress={selectedCountry ? preloadProgress : undefined}
             />
             <main className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-gray-50">
                 {renderContent()}

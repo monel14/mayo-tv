@@ -1,0 +1,46 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Converter</title>
+</head>
+<body>
+    <canvas id="canvas" style="display: none;"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const sizes = [72,96,128,144,152,192,384,512];
+        let currentIndex = 0;
+        
+        function convertIcon(size) {
+            canvas.width = size;
+            canvas.height = size;
+            
+            const img = new Image();
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0, size, size);
+                
+                canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `icon-${size}x${size}.png`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    
+                    currentIndex++;
+                    if (currentIndex < sizes.length) {
+                        setTimeout(() => convertIcon(sizes[currentIndex]), 100);
+                    }
+                }, 'image/png');
+            };
+            
+            img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImdyYWQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojZGMyNjI2O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiNiOTFjMWM7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjgwIiBmaWxsPSJ1cmwoI2dyYWQpIi8+CiAgPHJlY3QgeD0iODAiIHk9IjEyMCIgd2lkdGg9IjM1MiIgaGVpZ2h0PSIyNDAiIHJ4PSIyMCIgZmlsbD0id2hpdGUiIG9wYWNpdHk9IjAuOTUiLz4KICA8cmVjdCB4PSIxMDAiIHk9IjE0MCIgd2lkdGg9IjMxMiIgaGVpZ2h0PSIyMDAiIHJ4PSIxMCIgZmlsbD0iIzFmMjkzNyIvPgogIDxyZWN0IHg9IjE0MCIgeT0iMjAwIiB3aWR0aD0iMjAiIGhlaWdodD0iODAiIGZpbGw9IiMxMGI5ODEiLz4KICA8cmVjdCB4PSIxODAiIHk9IjE4MCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzEwYjk4MSIvPgogIDxyZWN0IHg9IjIyMCIgeT0iMTYwIiB3aWR0aD0iMjAiIGhlaWdodD0iMTIwIiBmaWxsPSIjMTBiOTgxIi8+CiAgPHJlY3QgeD0iMjYwIiB5PSIxNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIxMTAiIGZpbGw9IiMxMGI5ODEiLz4KICA8cmVjdCB4PSIzMDAiIHk9IjE5MCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjkwIiBmaWxsPSIjMTBiOTgxIi8+CiAgPHJlY3QgeD0iMzQwIiB5PSIyMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSI3MCIgZmlsbD0iIzEwYjk4MSIvPgogIDxyZWN0IHg9IjIwMCIgeT0iMzYwIiB3aWR0aD0iMTEyIiBoZWlnaHQ9IjIwIiByeD0iMTAiIGZpbGw9IndoaXRlIiBvcGFjaXR5PSIwLjkiLz4KICA8cmVjdCB4PSIyMzAiIHk9IjM4MCIgd2lkdGg9IjUyIiBoZWlnaHQ9IjQwIiByeD0iNSIgZmlsbD0id2hpdGUiIG9wYWNpdHk9IjAuOCIvPgogIDx0ZXh0IHg9IjI1NiIgeT0iNDYwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNDgiIGZvbnQtd2VpZ2h0PSJib2xkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSJ3aGl0ZSI+TUFZTzwvdGV4dD4KPC9zdmc+';
+        }
+        
+        // Démarrer la conversion
+        convertIcon(sizes[0]);
+    </script>
+</body>
+</html>
