@@ -1,9 +1,9 @@
 import { Channel } from '../types';
-import { CORS_PROXY_URL } from '../config/constants';
+import { CorsProxyManager } from './corsProxy';
 
 export const testChannelStatus = async (channel: Channel): Promise<'working' | 'error'> => {
     try {
-        const proxiedStreamUrl = `${CORS_PROXY_URL}${encodeURIComponent(channel.url)}`;
+        const { url: proxiedStreamUrl, proxyIndex } = CorsProxyManager.getProxiedUrl(channel.url);
         
         // Test avec une requête HEAD pour vérifier la disponibilité
         const controller = new AbortController();
@@ -15,7 +15,14 @@ export const testChannelStatus = async (channel: Channel): Promise<'working' | '
         });
 
         clearTimeout(timeoutId);
-        return response.ok ? 'working' : 'error';
+        
+        if (!response.ok) {
+            // Mark proxy as failed if we get a bad response
+            CorsProxyManager.markProxyAsFailed(proxyIndex);
+            return 'error';
+        }
+        
+        return 'working';
     } catch (error) {
         console.error('Erreur lors du test de la chaîne:', error);
         return 'error';

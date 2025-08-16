@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChannelsByCountry, Channel } from '../types';
-import { M3U_URL } from '../config/constants';
+import { rawM3uUrl } from '../config/constants';
+import { CorsProxyManager } from '../utils/corsProxy';
 import { AdvancedM3uParser } from '../utils/advancedM3uParser';
 import { cacheChannels, getCachedChannels, isCacheValid } from '../utils/cache';
 
@@ -48,28 +49,61 @@ export const useOptimizedChannels = () => {
                     return;
                 }
 
-                // Étape 2: Téléchargement réseau avec timeout optimisé
+                // Étape 2: Téléchargement réseau avec fallback CORS proxy
                 updateLoadingState({ 
                     stage: 'network', 
                     progress: 30, 
                     message: 'Téléchargement de la playlist...' 
                 });
 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+                let response: Response | null = null;
+                let lastError: Error | null = null;
+                let proxyIndex = 0;
 
-                const response = await fetch(M3U_URL, {
-                    signal: controller.signal,
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
+                // Essayer avec différents proxies CORS
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const { url: proxiedUrl, proxyIndex: currentProxyIndex } = CorsProxyManager.getProxiedUrl(rawM3uUrl);
+                        proxyIndex = currentProxyIndex;
+                        
+                        updateLoadingState({ 
+                            message: `Téléchargement via proxy ${proxyIndex + 1}...` 
+                        });
+
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+                        response = await fetch(proxiedUrl, {
+                            signal: controller.signal,
+                            headers: {
+                                'Cache-Control': 'no-cache',
+                                'Pragma': 'no-cache'
+                            }
+                        });
+
+                        clearTimeout(timeoutId);
+
+                        if (response.ok) {
+                            break; // Success, exit retry loop
+                        } else {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                    } catch (err: any) {
+                        lastError = err;
+                        console.warn(`Proxy ${proxyIndex} failed:`, err.message);
+                        CorsProxyManager.markProxyAsFailed(proxyIndex);
+                        
+                        if (attempt < 2) {
+                            updateLoadingState({ 
+                                message: `Proxy ${proxyIndex + 1} échoué, essai suivant...` 
+                            });
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                        }
                     }
-                });
+                }
 
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    throw new Error(`Erreur HTTP: ${response.status}`);
+                if (!response || !response.ok) {
+                    throw lastError || new Error('Tous les proxies CORS ont échoué');
                 }
 
                 updateLoadingState({ 
@@ -171,7 +205,8 @@ export const useOptimizedChannels = () => {
         // Force le rechargement en ignorant le cache
         const loadChannels = async () => {
             try {
-                const response = await fetch(M3U_URL + '&t=' + Date.now());
+                const { url: proxiedUrl } = CorsProxyManager.getProxiedUrl(rawM3uUrl + '?t=' + Date.now());
+                const response = await fetch(proxiedUrl);
                 if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
                 
                 const data = await response.text();
